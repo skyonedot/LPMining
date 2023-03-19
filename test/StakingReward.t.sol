@@ -6,10 +6,10 @@ import {StakingRewards} from "../src/StakingRewards.sol";
 import {MyERC20} from "../src/ERC20.sol";
 
 contract StakingRewardsTest is Test {
-    MyERC20 public tokenA;
-    StakingRewards public stakingRewards;
-    address public alice;
-    address public bob;
+    MyERC20  tokenA;
+    StakingRewards  stakingRewards;
+    address  alice;
+    address  bob;
     uint256 MAX_INT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     function setUp() public {
@@ -38,6 +38,10 @@ contract StakingRewardsTest is Test {
         vm.warp(150);
         vm.prank(address(bob));
         stakingRewards.stake(100 ether);
+
+        assertEq(stakingRewards.balanceOf(address(alice)), 10 ether);
+        assertEq(stakingRewards.balanceOf(address(bob)), 100 ether);
+        assertEq(stakingRewards.totalStaked(), 110 ether);
 
         vm.warp(170);
         vm.prank(address(alice));
