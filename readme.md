@@ -50,4 +50,6 @@ LP Mining
 A,B 然后用主网的
 
 
-forge test --match-path ./test/LpMining.t.sol -vvvv --rpc-url mainnetrpc
+forge test --match-path ./test/LpMining.t.sol -vvvv --rpc-url mainnetrpc --match-test test_RemoveLiquidity
+
+

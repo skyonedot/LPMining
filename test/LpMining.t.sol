@@ -2,8 +2,9 @@
 pragma solidity ^0.8.17;
 import "forge-std/Test.sol";
 import {MyERC20} from "../src/ERC20.sol";
+import {StakingRewards} from "../src/StakingRewards.sol";
 
-contract TestUniswapLiquidity is Test {
+contract LpMiningTest is Test {
     //UniV2 mainnet Factory and Router address
     address private constant FACTORY = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
     address private constant ROUTER = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
@@ -12,6 +13,7 @@ contract TestUniswapLiquidity is Test {
     uint256 MAX_INT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
     MyERC20  tokenA;
     MyERC20  tokenB;
+    StakingRewards  stakingRewards;
 
     function setUp() public {
         tokenA = new MyERC20();
@@ -130,6 +132,76 @@ contract TestUniswapLiquidity is Test {
         assertEq(tokenB.balanceOf(bob), 800 ether);
         assertEq(IERC20(pairAddress).totalSupply(), 300 ether);
         assertEq(IERC20(pairAddress).balanceOf(bob), 200 ether);
+    }
+
+    //Lp stake, Mining TokenA
+    function test_LpMining() public {
+        address pairAddress = IUniswapV2Factory(FACTORY).createPair(address(tokenA), address(tokenB));
+        tokenA.mint(address(alice), 100 ether);
+        tokenB.mint(address(alice), 100 ether);
+        tokenA.mint(address(bob), 1000 ether);
+        tokenB.mint(address(bob), 1000 ether);
+
+        vm.prank(address(alice));
+        tokenA.approve(ROUTER, MAX_INT);
+        vm.prank(address(alice));
+        tokenB.approve(ROUTER, MAX_INT);
+        vm.prank(address(bob));
+        tokenA.approve(ROUTER, MAX_INT);
+        vm.prank(address(bob));
+        tokenB.approve(ROUTER, MAX_INT);
+
+        vm.prank(address(alice));
+        IUniswapV2Router(ROUTER).addLiquidity(address(tokenA), address(tokenB), 100 ether, 100 ether, 0, 0, address(alice), block.timestamp);
+        vm.prank(address(bob));
+        IUniswapV2Router(ROUTER).addLiquidity(address(tokenA), address(tokenB), 200 ether, 200 ether, 0, 0, address(bob), block.timestamp);
+        uint alice_lp = IERC20(pairAddress).balanceOf(address(alice));
+        uint bob_lp = IERC20(pairAddress).balanceOf(address(bob));
+
+        //Start Stake LP Mining
+        stakingRewards = new StakingRewards(pairAddress , address(tokenA), 10 ether);
+        tokenA.mint(address(stakingRewards), 10 * 100 * 100 * 100 ether);
+
+        vm.warp(0);
+        vm.prank(address(alice));
+        IERC20(pairAddress).approve(address(stakingRewards), MAX_INT);
+        assertEq(IERC20(pairAddress).balanceOf(address(alice)), alice_lp, "Staking Pool Should Have All Alice LP");
+        vm.prank(address(alice));
+        stakingRewards.stake(alice_lp);
+        assertEq(IERC20(pairAddress).balanceOf(address(alice)), 0, "Alice Should Have No LP");
+        assertEq(stakingRewards.totalStaked(), alice_lp, "All totalStaked Should Be Alice LP");
+
+        vm.warp(100);
+        // console.log("Delta Percentage:%s",stdMath.percentDelta(stakingRewards.earned(address(alice)), 100*10 ether));
+        // 误差小于1%
+        assertEq(stdMath.percentDelta(stakingRewards.earned(address(alice)), 100*10 ether)<1 , true,"Alice Should Earned");
+
+        vm.warp(200);
+        vm.prank(address(bob));
+        IERC20(pairAddress).approve(address(stakingRewards), MAX_INT);
+        assertEq(IERC20(pairAddress).balanceOf(address(bob)), bob_lp, "Bob For Now Should Have All Bob LP");
+        vm.prank(address(bob));
+        stakingRewards.stake(bob_lp);
+        assertEq(IERC20(pairAddress).balanceOf(address(bob)), 0, "Bob Should Have No LP");
+        assertEq(stakingRewards.totalStaked(), alice_lp + bob_lp, "All totalStaked Should Be Alice LP + Bob LP");
+
+        vm.warp(210);
+        // console.log("Bob earned:%s", stakingRewards.earned(address(bob)));
+        // console.log("Alice_lp:%s, Bob_lp:%s", alice_lp, bob_lp);
+        // //这里的计算 会有精度问题 所以10ether中的ether, 往前提
+        // console.log("Bob Earned in Calculate: %s", (bob_lp * 1 ether)/(bob_lp+alice_lp) * (210-200) * 10);
+        // console.log("Alice Earned in Calculate: %s", (1 * (200 - 0) * 10 ether  + (alice_lp * 1 ether)/(bob_lp+alice_lp) * (210-200) * 10));
+        // console.log("Alice Earned in Solidity: %s", stakingRewards.earned(address(alice)));
+        assertEq(stdMath.percentDelta(stakingRewards.earned(address(bob)), (bob_lp * 1 ether)/(bob_lp+alice_lp) * (210-200) * 10) <1 , true,"Alice Should Earned");
+        assertEq(stdMath.percentDelta(stakingRewards.earned(address(alice)), (1 * (200 - 0) * 10 ether  + (alice_lp * 1 ether)/(bob_lp+alice_lp) * (210-200) * 10)) <1 , true,"Alice Should Earned");
+
+        vm.warp(300);
+        vm.prank(address(alice));
+        stakingRewards.claimReward();
+        assertEq(stdMath.percentDelta(tokenA.balanceOf(address(alice)), (1 * (200 - 0) * 10 ether  + (alice_lp * 1 ether)/(bob_lp+alice_lp) * (300-200) * 10)) <1 , true,"Alice Get TokenA Reward");
+        vm.prank(address(alice));
+        stakingRewards.withdraw(alice_lp);
+        assertEq(IERC20(pairAddress).balanceOf(address(alice)), alice_lp, "Alice Should Get Alice LP Back");
     }
 
     //上面最小值是   
