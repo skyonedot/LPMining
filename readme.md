@@ -2,19 +2,28 @@ log 两种方式
     emit或者console.log
 记得加-vv 或者 -vvvv
 
+---
 
-
-
-.env contente
-BN_RPC_URL=
-PRIVATE_KEY=
-ETHERSCAN_API_KEY=
-
+部署合约的一步
 
 forge script script/StakingRewards.s.sol:StakingRewardsScript --rpc-url $BN_RPC_URL --broadcast --verify -vvvv
 
+做测试的一步
 
-目前只实现了单币质押挖矿, 其实也等同于LP质押挖矿, 毕竟都是Token
+forge test --match-path ./test/LpMining.t.sol -vvvv --rpc-url mainnetrpc --match-test test_RemoveLiquidity
+
+---
+
+- src
+    - StakingRewards.sol 是将某个ERC20(可以是LP, 也可以是Token, 放进来) 分享另一个Token的奖励(这个奖励Token 是已经在合约地址里的)
+- test
+    - LpMinging.t.sol 是A和B 组成Pair, Lp放进去挖矿
+    - StakingReward.t.sol, 是把A放进去, 挖B
+
+
+---
+
+单币质押挖矿, 其实也等同于LP质押挖矿, 毕竟都是Token
 但是还没实现的是 AddLiquidity这样
 单币质押的核心 在于
 1. userRewardPerTokenPaid 这个值只会在 同一个用户进行操作的时候, 才会update, 代表在这个时间段内的除了当前这段, 所有段的每1Token, 需要赚取多少的利息, 所以调用earned function的时候, 是((balanceOf[_account] *(rewardPerToken() - userRewardPerTokenPaid[_account])) / 1e18) 这样计算出来的是, 在这一时间段内 用户所赚取的利息
@@ -37,19 +46,3 @@ forge script script/StakingRewards.s.sol:StakingRewardsScript --rpc-url $BN_RPC_
 
 Pair 即LP, 也是ERC20
 Router 是做addliquidity, 计算, Mint出LP发送给用户的
-
-
-
-
-
------------------------------
-LP Mining
-
-这里都可以用主网的几个地址来做, 
-比如现在就可以Mint两个Token了 对吧
-A,B 然后用主网的
-
-
-forge test --match-path ./test/LpMining.t.sol -vvvv --rpc-url mainnetrpc --match-test test_RemoveLiquidity
-
-
